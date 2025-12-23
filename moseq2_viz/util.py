@@ -189,8 +189,15 @@ def load_changepoint_distribution(cpfile: Union[str, Path]) -> np.ndarray:
     """
 
     cps = h5_to_dict(cpfile, "cps")
-    cp_dist = map(compose(np.diff, np.squeeze), cps.values())
-    return np.concatenate(list(cp_dist))
+    cp_dist = []
+    for key, val in cps.items():
+        val = np.squeeze(val)
+        if len(val) > 1:
+            cp_dist.append(np.diff(val))
+        else:
+            print(f"Warning: no changepoints found for {key}")
+
+    return np.concatenate(cp_dist)
 
 
 def load_timestamps(timestamp_file, col=0):

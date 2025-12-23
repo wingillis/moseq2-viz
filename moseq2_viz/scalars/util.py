@@ -421,10 +421,9 @@ def scalars_to_dataframe(index: dict, include_keys: list = ['SessionName', 'Subj
     dfs = []
     # Iterate through index file session info and paths
     for k, v in tqdm(index['files'].items(), disable=disable_output, desc='Creating MoSeq DataFrame'):
-        if has_model:
-            # skipping the session uuids (found in the index file) that are not included in the model uuids.
-            if k not in model_uuids:
-                continue
+        # skipping the session uuids (found in the index file) that are not included in the model uuids.
+        if has_model and k not in model_uuids: continue
+
         # Get path to extraction h5 file
         pth = h5_filepath_from_sorted(v)
         # Load scalars from h5
@@ -435,9 +434,8 @@ def scalars_to_dataframe(index: dict, include_keys: list = ['SessionName', 'Subj
             roi = h5_to_dict(pth, path='metadata/extraction/roi')['roi']
             dset['dist_to_center_px'] = compute_mouse_dist_to_center(roi, dset['centroid_x_px'], dset['centroid_y_px'])
         except KeyError:
-            print(f'ROI was not found in the given h5 file. \n'
+            print('ROI was not found in the given h5 file. \n'
                   f'Not including the dist_to_center_px column in outputted scalar_df for session-uuid {k}')
-            pass
 
         timestamps = get_timestamps_from_h5(pth)
 
