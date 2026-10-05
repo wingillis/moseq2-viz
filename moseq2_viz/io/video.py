@@ -386,7 +386,7 @@ def write_frames_preview(
                 text_thickness,
                 cv2.LINE_AA,
             )
-        pipe.stdin.write(disp_img.astype("uint8").tostring())
+        pipe.stdin.write(disp_img.astype("uint8").tobytes())  # tostring removed in numpy 1.23+
 
     if close_pipe:
         pipe.communicate()
