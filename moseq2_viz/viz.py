@@ -494,9 +494,23 @@ def plot_syll_stats_with_sem(scalar_df, syll_info=None, sig_sylls=None, stat='us
 
     # plot each group's stat data separately, computes groupwise SEM, and orders data based on the stat/ordering parameters
     hue = 'group' if groups is not None else None
-    ax = sns.pointplot(data=scalar_df, x='syllable', y=stat, hue=hue, order=ordering,
-                       join=join, dodge=True, ci=68, ax=ax, hue_order=groups,
-                       palette=colors)
+    pointplot_kwargs = dict(data=scalar_df, x='syllable', y=stat, order=ordering,
+                            ax=ax, hue_order=groups, palette=colors)
+    if hue is not None:
+        pointplot_kwargs['hue'] = hue
+
+    import inspect
+    _params = inspect.signature(sns.pointplot).parameters
+    if 'errorbar' in _params:
+        # seaborn >= 0.13: join -> linestyle, ci -> errorbar; dodge with a
+        # single hue level divides by zero in 0.13's plot_points
+        pointplot_kwargs['errorbar'] = ('ci', 68)
+        pointplot_kwargs['linestyle'] = 'none' if not join else '-'
+        pointplot_kwargs['dodge'] = bool(groups is not None and len(groups) > 1)
+    else:
+        pointplot_kwargs.update(join=join, dodge=True, ci=68)
+
+    ax = sns.pointplot(**pointplot_kwargs)
 
     # where some data has already been plotted to ax
     handles, labels = ax.get_legend_handles_labels()
