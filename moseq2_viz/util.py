@@ -86,6 +86,10 @@ def clean_dict(dct):
             out = e.item()  # np.asscalar removed in numpy 2
         else:
             out = e
+        # h5py >= 3 returns bytes for fixed-length strings where h5py 2
+        # auto-decoded them; keep plain str for the yaml dump
+        if isinstance(out, bytes):
+            out = out.decode("utf-8")
         return out
 
     return valmap(clean_entry, dct)
