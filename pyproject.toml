@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moseq2-viz"
+authors = [
+    { name="Datta Lab" },
+]
+dynamic = ["version"]
+
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+description = "MoSeq visualization and analysis tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1",
+    "cytoolz>=0.12",
+    "dtaidistance>=2.3.13",
+    "h5py>=3.13",
+    "joblib>=1.4",
+    "matplotlib>=3.10",
+    "networkx>=3.0",
+    "numpy>=2.2",
+    "opencv-python-headless>=4.10",
+    "pandas>=2.2",
+    "psutil>=5.9",
+    "pyarrow>=16.0",
+    "ruamel-yaml>=0.18",
+    "scikit-learn>=1.5",
+    "scipy>=1.15",
+    "seaborn>=0.13",
+    "tqdm>=4.67",
+]
+
+[project.scripts]
+moseq2-viz = "moseq2_viz.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["moseq2_viz*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "moseq2_viz.__version__"}

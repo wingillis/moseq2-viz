@@ -276,13 +276,13 @@ def model_comparisons_to_df(model_results: dict, pc_cps: np.ndarray) -> pd.DataF
             'model_kappa': v['model_parameters']['kappa'],
             'model_mean': np.nanmean(v['changepoints']),
             'model_median': np.nanmedian(v['changepoints']),
-            'model_mode': mode(v['changepoints'])[0][0],
+            'model_mode': mode(v['changepoints'], keepdims=True)[0][0],
         })
 
     df = pd.DataFrame(df)
     df['pc_mean'] = np.nanmean(pc_cps)
     df['pc_median'] = np.nanmedian(pc_cps)
-    df['pc_mode'] = mode(pc_cps)[0][0]
+    df['pc_mode'] = mode(pc_cps, keepdims=True)[0][0]
 
     return df.sort_values(by='model_kappa')
 
@@ -695,7 +695,7 @@ def get_syllable_statistics(data, fill_value=-5, max_syllable=100, count='usage'
         usages[s] = 0
         durations[s] = []
 
-    if isinstance(data, list) or (isinstance(data, np.ndarray) and data.dtype == np.object):
+    if isinstance(data, list) or (isinstance(data, np.ndarray) and data.dtype == object):
 
         for v in data:
             seq_array, locs = get_transitions(v)
@@ -779,11 +779,15 @@ def parse_batch_modeling(filename):
             'heldouts': np.squeeze(f['metadata/heldout_ll'][()]),
             'parameters': params,
             'scans': scans,
-            'filenames': [join(dirname(filename), basename(fname.decode('utf-8')))
-                          for fname in f['filenames']],
+            'filenames': [
+                join(dirname(filename), basename(
+                    fname.decode('utf-8') if isinstance(fname, bytes) else fname))
+                for fname in f['filenames']],
             'labels': np.squeeze(f['labels'][()]),
             'loglikes': np.squeeze(f['metadata/loglikes'][()]),
-            'label_uuids': [str(_, 'utf-8') for _ in f['/metadata/train_list']],
+            'label_uuids': [
+                _ if isinstance(_, str) else str(_, 'utf-8')
+                for _ in f['/metadata/train_list']],
             'scan_parameters': dict((x, get(x, params, None)) for x in scans)
         }
 
@@ -1025,7 +1029,7 @@ def sort_batch_results(data, averaging=True, filenames=None, **kwargs):
     new_shape = tuple([len(v) for v in param_list])
 
     if filenames is not None:
-        filename_index = np.empty(new_shape, dtype=np.object)
+        filename_index = np.empty(new_shape, dtype=object)
         for i, v in np.ndenumerate(filename_index):
             filename_index[i] = []
     else:

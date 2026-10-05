@@ -7,7 +7,8 @@ import shutil
 import logging
 import numpy as np
 import matplotlib as mpl
-from ruamel import yaml
+from ruamel.yaml import YAML
+yaml = YAML(typ="safe", pure=True)
 from pathlib import Path
 from tqdm.auto import tqdm
 from cytoolz import keyfilter, groupby
@@ -121,7 +122,7 @@ def add_group_wrapper(index_file, config_data):
 
     # Atomically write updated index file
     with open(new_index_path, "w+") as f:
-        yaml.safe_dump(index, f)
+        yaml.dump(index, f)
     shutil.move(new_index_path, index_file)
 
     print("Group(s) added successfully.")
@@ -636,7 +637,7 @@ def copy_h5_metadata_to_yaml_wrapper(input_dir):
         # Atomically write updated yaml
         new_file = Path(_yml).with_stem("_update")
         with open(new_file, "w+") as f:
-            yaml.safe_dump(_dict, f)
+            yaml.dump(_dict, f)
         shutil.move(new_file, _yml)
 
 

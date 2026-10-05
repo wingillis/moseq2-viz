@@ -9,7 +9,8 @@ import numpy as np
 from glob import glob
 from typing import Union
 from pathlib import Path
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
+yaml = YAML(typ="safe", pure=True)
 from cytoolz import curry, compose
 from cytoolz.curried import valmap
 from cytoolz.dicttoolz import dissoc, assoc
@@ -354,7 +355,7 @@ def read_yaml(yaml_path: str):
 
     """
     with open(yaml_path, "r") as f:
-        loaded = yaml.safe_load(f)
+        loaded = yaml.load(f)
     return loaded
 
 
