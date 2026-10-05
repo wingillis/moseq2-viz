@@ -203,7 +203,10 @@ def make_crowd_matrix(slices, nexamples=50, pad=30, raw_size=(512, 424), outmovi
             selection_end = selction_begin + nexamples
             use_slices = [_slice for i, _slice in enumerate(use_slices) if i in dur_order[selction_begin:selection_end]]
         else:
-            use_slices = rng.permutation(use_slices)[:nexamples]
+            # numpy >= 2 refuses ragged list->array coercion; shuffle
+            # indices instead (same RNG stream as permuting the array)
+            _order = rng.permutation(len(use_slices))[:nexamples]
+            use_slices = [use_slices[i] for i in _order]
 
     if len(use_slices) == 0 or max_dur < 0:
         return None
