@@ -1305,7 +1305,16 @@ def sort_syllables_by_stat(complete_df, stat='usage', max_sylls=None):
     if max_sylls is not None:
         complete_df = complete_df[complete_df.syllable < max_sylls]
 
-    tmp = complete_df.groupby('syllable').mean().sort_values(by=stat, ascending=False).index
+    # pandas >= 2 raises on non-numeric columns in .mean(); pandas 1
+    # silently dropped them, so restrict to numeric columns explicitly
+    numeric_cols = complete_df.select_dtypes(include='number').columns
+    tmp = (
+        complete_df[['syllable'] + [c for c in numeric_cols if c != 'syllable']]
+        .groupby('syllable')
+        .mean()
+        .sort_values(by=stat, ascending=False)
+        .index
+    )
 
     # Get sorted ordering
     ordering = list(tmp)
