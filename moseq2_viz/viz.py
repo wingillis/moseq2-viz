@@ -420,7 +420,20 @@ def scalar_plot(scalar_df, sort_vars=['group', 'uuid'], group_var='group',
 
     # sort scalars into a neat summary using group_vars
     summary = scalar_df.groupby(sort_vars)[show_scalars].aggregate(['mean', 'std']).reset_index()
-    summary = summary.melt(id_vars=group_var, value_vars=show_scalars)
+    try:
+        summary = summary.melt(id_vars=group_var, value_vars=show_scalars)
+    except KeyError:
+        # pandas >= 2 no longer matches bare first-level names when melting
+        # MultiIndex frames; rebuild the pandas-1 melt output
+        pieces = []
+        for sv in show_scalars:
+            for stat in ('mean', 'std'):
+                m = summary[[group_var]].copy()
+                m['variable_0'] = sv
+                m['variable_1'] = stat
+                m['value'] = summary[(sv, stat)].to_numpy()
+                pieces.append(m)
+        summary = pd.concat(pieces, ignore_index=True)
     groups = summary[group_var].unique()
     
     g = sns.FacetGrid(data=summary, row='variable_0', col='variable_1', sharey=False,
