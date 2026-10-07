@@ -7,7 +7,8 @@ import shutil
 import logging
 import numpy as np
 import matplotlib as mpl
-from ruamel import yaml
+from ruamel.yaml import YAML
+yaml = YAML(typ="safe", pure=True)
 from pathlib import Path
 from tqdm.auto import tqdm
 from cytoolz import keyfilter, groupby
@@ -39,6 +40,7 @@ from moseq2_viz.model.util import (
     relabel_by_usage,
     parse_model_results,
     get_best_fit,
+    get_num_syllables_for_coverage,
     compute_behavioral_statistics,
     make_separate_crowd_movies,
     labels_to_changepoints,
@@ -120,7 +122,7 @@ def add_group_wrapper(index_file, config_data):
 
     # Atomically write updated index file
     with open(new_index_path, "w+") as f:
-        yaml.safe_dump(index, f)
+        yaml.dump(index, f)
     shutil.move(new_index_path, index_file)
 
     print("Group(s) added successfully.")
@@ -276,7 +278,8 @@ def plot_syllable_stat_wrapper(
     sort=True,
     count="usage",
     group=None,
-    max_syllable=40,
+    max_syllable=None,
+    n_explained=99,
     ordering=None,
     ctrl_group=None,
     exp_group=None,
@@ -308,6 +311,14 @@ def plot_syllable_stat_wrapper(
         raise ValueError(
             "ctrl_group and exp_group must be specified to order by group differences"
         )
+
+    # Resolve max_syllable from model if not set
+    if max_syllable is None:
+        model_data = parse_model_results(model_fit)
+        max_syllable = get_num_syllables_for_coverage(
+            model_data["labels"], n_explained=n_explained
+        )
+        print(f'Using {max_syllable} syllables ({n_explained}% usage coverage)')
 
     # Load index file and model data
     _, sorted_index = init_wrapper_function(index_file, output_file=output_file)
@@ -440,6 +451,14 @@ def plot_transition_graph_wrapper(index_file, model_fit, output_file, config_dat
                 "pygraphviz must be installed to use graphviz layout engines"
             )
 
+    # Resolve max_syllable before it's used downstream
+    if config_data["max_syllable"] is None:
+        config_data["max_syllable"] = get_num_syllables_for_coverage(
+            model_data["labels"], n_explained=config_data.get("n_explained", 99)
+        )
+        print(f'Using {config_data["max_syllable"]} syllables '
+              f'({config_data.get("n_explained", 99)}% usage coverage)')
+
     # Get labels and optionally relabel them by usage sorting
     if config_data["sort"]:
         model_data["labels"] = relabel_by_usage(
@@ -501,6 +520,14 @@ def make_crowd_movies_wrapper(index_file, model_path, output_dir, config_data):
 
     # Get list of syllable labels for all sessions
     labels = model_fit["labels"]
+
+    # Resolve max_syllable before it's used by either branch
+    if config_data["max_syllable"] is None:
+        config_data["max_syllable"] = get_num_syllables_for_coverage(
+            labels, n_explained=config_data.get("n_explained", 99)
+        )
+        print(f'Using {config_data["max_syllable"]} syllables '
+              f'({config_data.get("n_explained", 99)}% usage coverage)')
 
     # Relabel syllable labels by usage sorting and save the ordering for crowd-movie file naming
     if config_data.get("sort", True):
@@ -610,7 +637,7 @@ def copy_h5_metadata_to_yaml_wrapper(input_dir):
         # Atomically write updated yaml
         new_file = Path(_yml).with_stem("_update")
         with open(new_file, "w+") as f:
-            yaml.safe_dump(_dict, f)
+            yaml.dump(_dict, f)
         shutil.move(new_file, _yml)
 
 

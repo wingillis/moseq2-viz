@@ -8,7 +8,8 @@ import subprocess
 import numpy as np
 from os.path import join
 from tqdm.auto import tqdm
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
+yaml = YAML(typ="safe", pure=True)
 import multiprocessing as mp
 from functools import partial
 import matplotlib.pyplot as plt
@@ -106,7 +107,7 @@ def write_crowd_movie_info_file(model_path, model_fit, index_file, output_dir):
 
     # Write metadata info file
     with open(info_file, "w") as f:
-        yaml.safe_dump(info_dict, f)
+        yaml.dump(info_dict, f)
 
 
 def write_crowd_movies(
@@ -359,7 +360,11 @@ def write_frames_preview(
         pipe = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Get color map
-    use_cmap = plt.get_cmap(cmap)
+    try:
+        use_cmap = plt.get_cmap(cmap)
+    except AttributeError:  # matplotlib >= 3.9
+        import matplotlib as mpl
+        use_cmap = mpl.colormaps[cmap]
 
     # Write movie
     for i in tqdm(
@@ -381,7 +386,7 @@ def write_frames_preview(
                 text_thickness,
                 cv2.LINE_AA,
             )
-        pipe.stdin.write(disp_img.astype("uint8").tostring())
+        pipe.stdin.write(disp_img.astype("uint8").tobytes())  # tostring removed in numpy 1.23+
 
     if close_pipe:
         pipe.communicate()
