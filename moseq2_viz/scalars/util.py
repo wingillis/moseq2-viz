@@ -380,8 +380,15 @@ def compute_mouse_dist_to_center(roi, centroid_x_px, centroid_y_px):
 
     # Get (x,y) distances to bucket center throughout the session recording.
     # add back bounding box offset
-    dx = (centroid_x_px + xmin) - center_x
-    dy = (centroid_y_px + ymin) - center_y
+    # (float64: numpy >= 2 keeps float32 through python-scalar ops where
+    # numpy 1 promoted to float64; pin the release dtype)
+    # numpy 1 (value-based casting) folded the int/float scalars into the
+    # float32 centroid arithmetic without widening; NEP 50 promotes numpy
+    # int64 scalars to float64. Cast the scalars to the centroid dtype to
+    # reproduce the release values exactly.
+    cdtype = np.asarray(centroid_x_px).dtype
+    dx = (centroid_x_px + cdtype.type(xmin)) - cdtype.type(center_x)
+    dy = (centroid_y_px + cdtype.type(ymin)) - cdtype.type(center_y)
 
     # Compute distance to center
     return np.hypot(dx, dy)

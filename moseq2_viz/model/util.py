@@ -43,6 +43,24 @@ def _assert_models_have_same_kappa(model_paths):
         raise ValueError('You cannot merge models trained with different kappas')
 
 
+def get_num_syllables_for_coverage(labels, n_explained=99):
+    """
+    Return the number of syllables needed to explain n_explained percent of all frames.
+
+    Args:
+    labels (list): list of syllable frame-labels for each session.
+    n_explained (int): explained usage percentage threshold (0-100).
+
+    Returns:
+    int: number of syllables needed to reach the coverage threshold.
+    """
+
+    syllable_usages = list(get_syllable_usages(labels, count='usage').values())
+    cumulative_explanation = np.cumsum(syllable_usages / sum(syllable_usages))
+    cumulative_explanation = 100 * cumulative_explanation / np.max(cumulative_explanation)
+    return int(np.argwhere(cumulative_explanation >= n_explained)[0][0])
+
+
 def compute_syllable_explained_variance(model, save_dir=os.getcwd(), n_explained=99):
     """
     Compute the maximum number of syllables to include that explain n_explained percent of all frames in the dataset.
@@ -55,14 +73,12 @@ def compute_syllable_explained_variance(model, save_dir=os.getcwd(), n_explained
     max_sylls (int): the index of the maximum number of syllables to include that explain the given percentage of the variance
     """
 
+    max_sylls = get_num_syllables_for_coverage(model['labels'], n_explained=n_explained)
+    print(f'Number of syllables explaining {n_explained}% variance: {max_sylls}')
+
     syllable_usages = list(get_syllable_usages(model['labels'], count='usage').values())
     cumulative_explanation = np.cumsum(syllable_usages / sum(syllable_usages))
-
-    # Syllables may not explain 100% of the variance due to rounding and precision
-    # Normalized cumulative explained variance by max cumulative explained variance
-    cumulative_explanation = 100 * cumulative_explanation/np.max(cumulative_explanation)
-    max_sylls = np.argwhere(cumulative_explanation >= n_explained)[0][0]
-    print(f'Number of syllables explaining {n_explained}% variance: {max_sylls}')
+    cumulative_explanation = 100 * cumulative_explanation / np.max(cumulative_explanation)
 
     fig, ax = plt.subplots(1)
     ax.set_xlabel('Number of Syllables to Include')
@@ -260,13 +276,13 @@ def model_comparisons_to_df(model_results: dict, pc_cps: np.ndarray) -> pd.DataF
             'model_kappa': v['model_parameters']['kappa'],
             'model_mean': np.nanmean(v['changepoints']),
             'model_median': np.nanmedian(v['changepoints']),
-            'model_mode': mode(v['changepoints'])[0][0],
+            'model_mode': mode(v['changepoints'], keepdims=True)[0][0],
         })
 
     df = pd.DataFrame(df)
     df['pc_mean'] = np.nanmean(pc_cps)
     df['pc_median'] = np.nanmedian(pc_cps)
-    df['pc_mode'] = mode(pc_cps)[0][0]
+    df['pc_mode'] = mode(pc_cps, keepdims=True)[0][0]
 
     return df.sort_values(by='model_kappa')
 
@@ -679,7 +695,7 @@ def get_syllable_statistics(data, fill_value=-5, max_syllable=100, count='usage'
         usages[s] = 0
         durations[s] = []
 
-    if isinstance(data, list) or (isinstance(data, np.ndarray) and data.dtype == np.object):
+    if isinstance(data, list) or (isinstance(data, np.ndarray) and data.dtype == object):
 
         for v in data:
             seq_array, locs = get_transitions(v)
@@ -763,11 +779,15 @@ def parse_batch_modeling(filename):
             'heldouts': np.squeeze(f['metadata/heldout_ll'][()]),
             'parameters': params,
             'scans': scans,
-            'filenames': [join(dirname(filename), basename(fname.decode('utf-8')))
-                          for fname in f['filenames']],
+            'filenames': [
+                join(dirname(filename), basename(
+                    fname.decode('utf-8') if isinstance(fname, bytes) else fname))
+                for fname in f['filenames']],
             'labels': np.squeeze(f['labels'][()]),
             'loglikes': np.squeeze(f['metadata/loglikes'][()]),
-            'label_uuids': [str(_, 'utf-8') for _ in f['/metadata/train_list']],
+            'label_uuids': [
+                _ if isinstance(_, str) else str(_, 'utf-8')
+                for _ in f['/metadata/train_list']],
             'scan_parameters': dict((x, get(x, params, None)) for x in scans)
         }
 
@@ -1009,7 +1029,7 @@ def sort_batch_results(data, averaging=True, filenames=None, **kwargs):
     new_shape = tuple([len(v) for v in param_list])
 
     if filenames is not None:
-        filename_index = np.empty(new_shape, dtype=np.object)
+        filename_index = np.empty(new_shape, dtype=object)
         for i, v in np.ndenumerate(filename_index):
             filename_index[i] = []
     else:
@@ -1285,7 +1305,16 @@ def sort_syllables_by_stat(complete_df, stat='usage', max_sylls=None):
     if max_sylls is not None:
         complete_df = complete_df[complete_df.syllable < max_sylls]
 
-    tmp = complete_df.groupby('syllable').mean().sort_values(by=stat, ascending=False).index
+    # pandas >= 2 raises on non-numeric columns in .mean(); pandas 1
+    # silently dropped them, so restrict to numeric columns explicitly
+    numeric_cols = complete_df.select_dtypes(include='number').columns
+    tmp = (
+        complete_df[['syllable'] + [c for c in numeric_cols if c != 'syllable']]
+        .groupby('syllable')
+        .mean()
+        .sort_values(by=stat, ascending=False)
+        .index
+    )
 
     # Get sorted ordering
     ordering = list(tmp)

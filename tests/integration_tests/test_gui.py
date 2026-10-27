@@ -1,6 +1,7 @@
 import os
 import shutil
-import ruamel.yaml as yaml
+from ruamel.yaml import YAML
+yaml = YAML(typ="safe", pure=True)
 from unittest import TestCase
 from moseq2_viz.util import read_yaml
 from moseq2_viz.gui import get_groups_command, add_group, plot_stats_command, \
@@ -35,7 +36,7 @@ class TestGUI(TestCase):
         index_data = read_yaml(index_path)
 
         with open(tmp_yaml, 'w') as g:
-            yaml.safe_dump(index_data, g)
+            yaml.dump(index_data, g)
 
         key = 'SubjectName'
         value = '012517'

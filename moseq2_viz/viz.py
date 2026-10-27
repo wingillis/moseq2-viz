@@ -203,7 +203,10 @@ def make_crowd_matrix(slices, nexamples=50, pad=30, raw_size=(512, 424), outmovi
             selection_end = selction_begin + nexamples
             use_slices = [_slice for i, _slice in enumerate(use_slices) if i in dur_order[selction_begin:selection_end]]
         else:
-            use_slices = rng.permutation(use_slices)[:nexamples]
+            # numpy >= 2 refuses ragged list->array coercion; shuffle
+            # indices instead (same RNG stream as permuting the array)
+            _order = rng.permutation(len(use_slices))[:nexamples]
+            use_slices = [use_slices[i] for i in _order]
 
     if len(use_slices) == 0 or max_dur < 0:
         return None
@@ -420,7 +423,20 @@ def scalar_plot(scalar_df, sort_vars=['group', 'uuid'], group_var='group',
 
     # sort scalars into a neat summary using group_vars
     summary = scalar_df.groupby(sort_vars)[show_scalars].aggregate(['mean', 'std']).reset_index()
-    summary = summary.melt(id_vars=group_var, value_vars=show_scalars)
+    try:
+        summary = summary.melt(id_vars=group_var, value_vars=show_scalars)
+    except KeyError:
+        # pandas >= 2 no longer matches bare first-level names when melting
+        # MultiIndex frames; rebuild the pandas-1 melt output
+        pieces = []
+        for sv in show_scalars:
+            for stat in ('mean', 'std'):
+                m = summary[[group_var]].copy()
+                m['variable_0'] = sv
+                m['variable_1'] = stat
+                m['value'] = summary[(sv, stat)].to_numpy()
+                pieces.append(m)
+        summary = pd.concat(pieces, ignore_index=True)
     groups = summary[group_var].unique()
     
     g = sns.FacetGrid(data=summary, row='variable_0', col='variable_1', sharey=False,
@@ -481,9 +497,23 @@ def plot_syll_stats_with_sem(scalar_df, syll_info=None, sig_sylls=None, stat='us
 
     # plot each group's stat data separately, computes groupwise SEM, and orders data based on the stat/ordering parameters
     hue = 'group' if groups is not None else None
-    ax = sns.pointplot(data=scalar_df, x='syllable', y=stat, hue=hue, order=ordering,
-                       join=join, dodge=True, ci=68, ax=ax, hue_order=groups,
-                       palette=colors)
+    pointplot_kwargs = dict(data=scalar_df, x='syllable', y=stat, order=ordering,
+                            ax=ax, hue_order=groups, palette=colors)
+    if hue is not None:
+        pointplot_kwargs['hue'] = hue
+
+    import inspect
+    _params = inspect.signature(sns.pointplot).parameters
+    if 'errorbar' in _params:
+        # seaborn >= 0.13: join -> linestyle, ci -> errorbar; dodge with a
+        # single hue level divides by zero in 0.13's plot_points
+        pointplot_kwargs['errorbar'] = ('ci', 68)
+        pointplot_kwargs['linestyle'] = 'none' if not join else '-'
+        pointplot_kwargs['dodge'] = bool(groups is not None and len(groups) > 1)
+    else:
+        pointplot_kwargs.update(join=join, dodge=True, ci=68)
+
+    ax = sns.pointplot(**pointplot_kwargs)
 
     # where some data has already been plotted to ax
     handles, labels = ax.get_legend_handles_labels()
@@ -633,10 +663,10 @@ def plot_cp_comparison(model_results, pc_cps, plot_all=False, best_model=None, b
 
     # Plot best model description
     s = f'Best Model CP Stats: Mean, median, mode (s) = {np.nanmean(model_cps):.4f},' \
-        f' {np.nanmedian(model_cps):.4f}, {mode(model_cps)[0][0]:.4f}'
+        f' {np.nanmedian(model_cps):.4f}, {mode(model_cps, keepdims=True)[0][0]:.4f}'
     # Plot PC CP description
     t = f'PC CP Stats: Mean, median, mode (s) = {np.nanmean(pc_cps):.4f}, ' \
-        f'{np.nanmedian(pc_cps):.4f}, {mode(pc_cps)[0][0]:.4f}'
+        f'{np.nanmedian(pc_cps):.4f}, {mode(pc_cps, keepdims=True)[0][0]:.4f}'
 
     if not plot_all and best_model is not None:
         # clipping the changepoints at 10 seconds
